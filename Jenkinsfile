@@ -1,56 +1,46 @@
-def registry = 'https://ncpljfrog.jfrog.io'
+def registry  ='https://varedla.jfrog.io/'
 pipeline {
     tools {
         maven "Maven3"
     }
     agent any
-        environment {
-            SCANNER_HOME= tool 'sonar-scanner'
-        }
-    
-        stages {
-            stage ('Checkout from git'){
-                steps {
-                    git branch: 'main', url: 'https://github.com/bkrrajmali/springbootapp.git'
+    environment {
+        SCANNER_HOME= tool 'sonar-scanner'
+    }
+    stages {
+        stage('Checkout From Git') {
+            steps {
+                git branch: 'main', url: 'https://github.com/bkrrajmali/springbootapp.git'
             }
         }
-        stage ('Maven Build'){
-                steps {
-                   sh 'mvn clean install'
-            } 
-        }
-        stage ('Unit Test'){
+        stage('Maven Build') {
             steps {
-                echo '<----------------------Unit Test Under Progess ------------------>'
+                sh 'mvn clean install'
+            }
+        }
+        stage('Unit Test') {
+            steps {
+                echo '<----------------------Unit Test Under Progess-------------------->'
                 sh 'mvn surefire-report:report'
-                echo '<----------------------Unit Test Done------------------>'
+                echo '<----------------------Unit Test Finished------------------------->'
             }
         }
-        stage ('Sonarqube analysis'){
+        stage('SonarQube Analysis') {
             steps {
-                script {
-                    withSonarQubeEnv('sonar-server') {
-                        sh  ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=springbootapp \
-                        -Dsonar.projectKey=springbootapp '''
-                    }
+               script {
+                withSonarQubeEnv('sonar-server') {
+                sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=springbootapp -Dsonar.projectKey=bkrrajmali_springbootapp '''
                 }
+               }
             }
         }
-        stage ('Quality Gate Test'){
-            steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
-                }
+        stage ('Quality Gate'){
+        steps {
+            script {
+                waitForQualityGate abortPipeline: false, credentialsId: 'sonar'
             }
         }
-        stage ('Build Docker Image'){
-            steps {
-                script {
-                    sh 'docker build -t myrepo .'
-                }
-            }
-        }
-        
+      }
         stage("Jar Publish") {
             steps {
                 script {
@@ -61,7 +51,7 @@ pipeline {
                               "files": [
                                 {
                                   "pattern": "target/springbootApp.jar",
-                                  "target": "ncplmaven-libs-release-local",
+                                  "target": "ncpl-libs-release",
                                   "flat": "false",
                                   "props" : "${properties}",
                                   "exclusions": [ "*.sha1", "*.md5"]
@@ -75,25 +65,29 @@ pipeline {
                 
                 }
             }   
-        }  
-    stage ("Push Image to ECR")  {
+        } 
+    stage ('Build Docker Image'){
+      steps {
+        script {
+            sh 'docker build -t myrepo .'
+        }
+      }
+    }  
+    stage ('Push Docker Image') {
         steps {
             script {
-                sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 037500517393.dkr.ecr.us-east-1.amazonaws.com'
-                //sh 'docker build -t ncplrepo .'
-                sh 'docker tag myrepo:latest 037500517393.dkr.ecr.us-east-1.amazonaws.com/ncplrepo:latest'
-                sh 'docker push 037500517393.dkr.ecr.us-east-1.amazonaws.com/ncplrepo:latest'
-
+                sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 656952365822.dkr.ecr.us-east-1.amazonaws.com'
+                sh 'docker tag myrepo:latest 656952365822.dkr.ecr.us-east-1.amazonaws.com/ncplrepo:latest'
+                sh 'docker push 656952365822.dkr.ecr.us-east-1.amazonaws.com/ncplrepo:latest'
             }
         }
     }
-    stage('Kuberernetes Deployment'){
-        steps{
-            script {
-                sh 'aws eks --region us-east-1 update-kubeconfig --name my-first-eks-cluster'
-                sh 'kubectl apply -f eks-deploy-k8s.yaml'
-            }
+    stage ('Deploy to Kubernetes'){
+      steps {
+        script {
+            sh 'kubectl apply -f eks-deploy-k8s.yaml'
         }
+      }
+    }  
     }
-}
 }
